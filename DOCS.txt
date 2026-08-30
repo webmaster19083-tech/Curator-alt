@@ -1,0 +1,180 @@
+CURATOR — full reference
+=========================
+
+Curator is a self-hosted, site-agnostic front-end for gallery-dl: paste in
+creator/gallery URLs, it downloads them locally via the real gallery-dl CLI,
+indexes everything into a local SQLite database, and serves a browser UI for
+managing sources and browsing/slideshowing the results. Everything runs on
+your machine; nothing is uploaded anywhere.
+
+This is the long version. `curator --help` covers just the command line flags.
+Output below is long — pipe it through a pager if you like:
+    curator --docs | more        (Windows)
+    curator --docs | less        (Linux/macOS)
+
+
+RUNNING IT
+----------
+    curator.exe
+Then open http://127.0.0.1:8642 in a browser. Leave the terminal running.
+No Python or pip required — curator.exe is a single self-contained binary.
+
+
+WHERE YOUR DATA LIVES
+----------------------
+The binary and static/ live wherever you put curator.exe. Data (downloads,
+database, settings, log) defaults to ~/Curator.
+
+To move it permanently, edit config.json next to curator.exe:
+    { "data_dir": "E:/CuratorData" }
+config.json is created automatically on first run if it doesn't exist yet.
+
+For a one-off override, the CURATOR_DATA_DIR environment variable takes
+priority over config.json for that session only.
+
+gallery-dl binary: Curator calls `gallery-dl` from your PATH by default.
+Override with `"gallery_dl_bin": "C:/path/to/gallery-dl.exe"` in config.json.
+
+
+REMOTE ACCESS (PHONE, IPAD, ANOTHER COMPUTER)
+-----------------------------------------------
+Curator listens on every network interface, so any device that can reach
+your PC can open the same UI — no separate app needed.
+
+Same Wi-Fi as your PC:
+    Open http://<your-pc's-LAN-IP>:8642 in a browser. Find the IP with
+    `ipconfig` in PowerShell ("IPv4 Address" under your active adapter).
+
+From anywhere (cellular, traveling):
+    Don't port-forward your router — Curator has no login, and that would
+    put an unauthenticated server on the open internet. Use Tailscale
+    (tailscale.com, free for personal use) instead:
+      1. Install Tailscale on the PC and sign in.
+      2. Install the Tailscale app on your phone, same account.
+      3. Run `tailscale ip -4` on the PC for its Tailscale IP (100.x.x.x).
+      4. With Tailscale on, open http://100.x.x.x:8642 on your phone.
+      5. iOS Safari: Share -> Add to Home Screen for an app-like icon.
+
+Windows Firewall: the first connection from another device may trigger a
+firewall popup — click Allow. To add the rule manually:
+    New-NetFirewallRule -DisplayName "Curator" -Direction Inbound -Protocol TCP -LocalPort 8642 -Action Allow
+
+
+SPEEDING UP DOWNLOADS
+-----------------------
+Downloading is limited by network requests per source, not CPU/GPU — more
+concurrent sources helps more than a faster processor. Settings -> "max
+concurrent downloads" (default 6, up to 20). Push it up if your connection
+can take it; bring it down if sources start landing on "error" (usually a
+site rate-limiting too many parallel connections from your IP).
+
+
+WHY BROWSING FEELS FAST (THUMBNAILS & CACHING)
+-------------------------------------------------
+Grid tiles and sidebar previews use small cached JPEG thumbnails (360px long
+edge), not the multi-MB originals — the lightbox and slideshow still load the
+real file. Videos only fetch metadata once they're about to scroll into view.
+Everything is served with long-lived cache headers since files never change
+once downloaded. Deleting the thumbnails/ folder is always safe; it's a cache
+and rebuilds as needed.
+
+
+ADDING SOURCES
+---------------
+"+ add multiple at once" (or the quick-add box), one URL per line or comma
+separated. https:// is optional. Paste the actual profile/gallery URL —
+Curator doesn't guess one from a bare username, since gallery-dl matches on
+per-site URL patterns. Each source downloads in the background; watch its
+status dot go pending -> downloading -> done.
+
+
+GROUPS
+-------
+"+ group" in the sidebar creates one. Move a source into a group via its
+menu's "group" dropdown. Click a group to browse everything inside it,
+shuffled together. Double-click to rename; the x deletes a group without
+deleting its sources (they fall back to "Ungrouped").
+
+Subgroups: every group has its own + button for nesting (e.g. a "Platforms"
+group containing "Patreon" and "Twitter"). Browsing a group includes its
+subgroups' content too. Deleting a group with subgroups promotes them up one
+level rather than deleting or flattening them.
+
+Groups and tags are interchangeable: a group's own name, and any tags
+you've explicitly added to it, apply live to every file nested inside it
+(including through subgroups) — filtering by tag "nsfw" matches a file
+that's explicitly tagged "nsfw" AND a file that just lives in a group named
+(or tagged) "nsfw". Nothing is copied or written per-file; move a source to
+a different group and its effective tags update immediately. These
+inherited tags show up as dashed, read-only chips in the lightbox — remove
+them by editing the group (or moving the file out of it), not the file.
+
+
+RATINGS & TAGS
+---------------
+Click a star in the lightbox to rate a file 1-5; click the current rating
+again to clear it. Add tags via the lightbox's tag box (Enter or "+ tag");
+remove one by clicking its x. Both are filterable/sortable from the
+toolbar, and both apply to groups too (see above) — tag a group from its
+sidebar tag button (🏷).
+
+
+EXPORT / IMPORT
+-----------------
+"export list" in the sidebar footer downloads a JSON backup of every
+source's name, URL, group, and selection state (not the actual files).
+"import list" reads one of those back in (or any JSON shaped like
+{"sources":[{"url": "..."}]}), recreating groups it references; duplicates
+are skipped automatically.
+
+A dismissible reminder banner appears in the sidebar once it's been a
+while (30 days by default, "backup reminder" in Settings) since the last
+export, or if you've never exported at all.
+
+
+LIVE BROWSE (PREVIEW WITHOUT DOWNLOADING)
+--------------------------------------------
+"live browse" in the toolbar opens a mode that streams directly from
+gallery-dl's listing output (`gallery-dl -j`) instead of downloading
+anything — nothing here touches your library or database. Paste a URL to
+browse it immediately; anything you like there can be added to the real
+library with one click. Useful for previewing before committing disk space.
+
+
+COCK HERO SESSION (TIER 3)
+-----------------------------
+Open /ch/ in your browser for the Cock Hero session UI. Configure tag/source
+filters, a pacing profile, and session duration. Cock hero fetches a filtered
+playlist from curator's /api/ch/playlist endpoint and drives the display —
+advancing media, playing video clips, layering a HUD with pace cues and
+elapsed time. Beat sync uses the Web Audio API, entirely client-side.
+
+To enable session logging, set "ch_log_sessions": true in Settings.
+
+
+LOGS & FINDING ERRORS
+------------------------
+Everything goes to curator.log in your data directory (rotates past 5MB).
+Click "view log" in the sidebar footer to open it as plain text.
+
+
+NOTES & KNOWN LIMITATIONS
+-----------------------------
+- Single-user, local tool: no accounts, no API auth.
+- Don't expose port 8642 to the open internet — use Tailscale for remote access.
+- Large libraries paginate the grid in batches of 150 while scrolling.
+- gallery-dl must be on your PATH (or configured in config.json as gallery_dl_bin).
+
+
+TROUBLESHOOTING
+------------------
+- Check curator.log first — most issues show up there with enough detail to diagnose.
+- "gallery-dl could not be launched" -> ensure gallery-dl is installed and on your PATH.
+- A source stuck on "error" -> hover its row for the last bit of gallery-dl's output.
+- Port already in use -> another curator.exe is running, or change the port in source.
+
+A NOTE ON USE
+---------------
+Curator downloads whatever you point it at. Only add creators/galleries you
+have the right to access, and be mindful of each site's terms of service
+and rate limits.
